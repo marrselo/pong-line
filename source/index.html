@@ -1,0 +1,251 @@
+<html>
+<head>
+
+	<title>Long Pong</title>
+
+	<style type = "text/css">
+
+		body
+		{
+			background-color: #222222;
+		}
+
+	</style>
+
+</head>
+
+<body onload="initGame();">
+	<canvas id="canvas" width="400" height="300" />
+	<script>
+
+window.requestAnimFrame = (function(callback) {
+return window.requestAnimationFrame ||
+	window.webkitRequestAnimationFrame || 
+	window.mozRequestAnimationFrame ||
+	window.msRequestAnimationFrame ||
+	window.oRequestAnimationFrame ||
+	function(callback) {
+	  window.setTimeout(callback, 1000 / 60);
+	};
+})();
+
+//Constants
+var kDirectionNone	= 0;
+var kDirectionUp	= 1;
+var kDirectionDown	= 2;
+
+//Global variables
+var canvas, context;
+var width, height;
+var firstFrame;
+var lastFrameTime;
+var t;
+
+var _ball;
+var _paddles;
+var _nPaddles;
+
+//constructors
+
+function Ball(x,y,radius,vx,vy)
+{
+	this.x = x;
+	this.y = y;
+	this.radius = radius;
+	this.prevX = x;
+	this.prevY = y;
+	this.vx = vx;
+	this.vy = vy;
+	this.color = 'white'
+}
+
+function Paddle(x,y,width,height)
+{
+	this.x = x;
+	this.y = y;
+	this.width = width;
+	this.height = height;
+	this.direction = kDirectionNone;
+	this.vy = 400.0;
+	this.color = 'white'
+}
+
+function initGame()
+{
+	canvas = document.getElementById('canvas');
+	context = canvas.getContext('2d');
+
+	width = canvas.width;
+	height = canvas.height;
+
+	firstFrame = true;
+	lastFrameTime = new Date().getTime();
+
+	_ball = new Ball(width * 0.5, height * 0.5, 8, 0,0);
+	_paddles = new Array();
+	
+	_nPaddles = 2;
+	_paddles[0] = new Paddle(30, 90, 18, 80);
+	_paddles[1] = new Paddle(width - 30, 70, 18, 80);
+
+	//TODO: randomizar
+	_ball.vx = 200;
+	_ball.vy = 200;
+
+	animate();
+}
+
+function animate()
+{
+	t = (new Date().getTime() - lastFrameTime) / 1000.0;
+	lastFrameTime = new Date().getTime();
+
+	context.clearRect(0, 0, width, height);
+
+	ballLogic();
+	paddleLogic();
+
+	context.beginPath();
+	context.rect(0,0,400,300);
+	context.fillStyle = '#444444';
+	context.fill();
+
+	for (var i = 0; i < _nPaddles; i++)
+	{
+		drawPaddle(_paddles[i]);
+	}
+
+	drawBall();
+
+	requestAnimFrame(function() { animate() });
+}
+
+
+function paddleLogic()
+{
+	for (var i = 0; i < _nPaddles; i++)
+	{
+		if(_paddles[i].direction == kDirectionUp)
+		{
+			_paddles[i].y += _paddles[i].vy * t;
+		}
+		else if(_paddles[i].direction == kDirectionDown)
+		{
+			_paddles[i].y -= _paddles[i].vy * t;
+		}
+
+		_paddles[i].y = limit(_paddles[i].y, _paddles[i].height * 0.5, height - _paddles[i].height * 0.5);
+	}
+}
+
+function drawPaddle(paddle)
+{
+	context.beginPath();
+	context.rect(paddle.x - 0.5 * paddle.width,
+				paddle.y - 0.5 * paddle.height, 
+				paddle.width, paddle.height);
+	context.fillStyle = paddle.color;
+	context.fill();
+}
+
+function ballLogic()
+{
+	_ball.prevX = _ball.x;
+	_ball.prevY = _ball.y;
+
+	_ball.x += _ball.vx * t;
+	_ball.y += _ball.vy * t;
+
+	if( _ball.x + _ball.radius > width) _ball.vx *= -1;
+	if( _ball.x - _ball.radius < 0)	 	_ball.vx *= -1;
+
+	if(	_ball.y + _ball.radius > height)_ball.vy *= -1;
+	if( _ball.y - _ball.radius < 0)  	_ball.vy *= -1;
+
+	_ball.color = 'white';
+	for(var i = 0; i < _nPaddles; i++)
+	{
+		if(checkColission(_ball, _paddles[i]))
+		{
+			//console.log('atan2 = ' + Math.atan2(_ball.y - _paddles[i].y, _ball.x - _paddles[i].x) * 180 / Math.PI);
+			var ballAngle = Math.abs(Math.atan2(_ball.y - _paddles[i].y, _ball.x - _paddles[i].x));
+			var paddleCornerAngle1 = Math.abs(Math.atan2(_paddles[i].height * 0.5, _paddles[i].width * 0.5));
+			var paddleCornerAngle2 = Math.PI - paddleCornerAngle1;
+
+			console.log(paddleCornerAngle1 + '2:' + paddleCornerAngle2);
+			if(ballAngle < paddleCornerAngle1 || ballAngle > paddleCornerAngle2) 
+				_ball.vx *= -1;
+			else
+				_ball.vy *= -1;
+
+			_ball.x += _ball.vx * t;
+			_ball.y += _ball.vy * t;
+			_ball.color = 'red';
+			break;
+		}
+	}
+
+	_ball.x = limit(_ball.x, _ball.radius, width - _ball.radius);
+	_ball.y = limit(_ball.y, _ball.radius, height - _ball.radius);
+}
+
+function checkColission(circle, rectangle)
+{
+	var closestX = limit(circle.x, rectangle.x - rectangle.width * 0.5, rectangle.x + rectangle.width * 0.5);
+	var closestY = limit(circle.y, rectangle.y - rectangle.height * 0.5, rectangle.y + rectangle.height * 0.5);
+
+	// Calculate the distance between the circle's center and this closest point
+	var distanceX = circle.x - closestX;
+	var distanceY = circle.y - closestY;
+
+	// If the distance is less than the circle's radius, an intersection occurs
+	var distanceSquared = (distanceX * distanceX) + (distanceY * distanceY);
+	return distanceSquared < (circle.radius * circle.radius);
+}
+
+function limit(n, min, max)
+{
+	if(n < min) return min;
+	if(n > max) return max;
+	return n;
+}
+
+function drawBall()
+{
+	context.beginPath();
+	context.arc(_ball.x, _ball.y, _ball.radius,0, 2 * Math.PI, false);
+	context.fillStyle = _ball.color;
+	context.fill();
+}
+
+document.onkeydown = function(evt) {
+    evt = evt || window.event;
+    switch (evt.keyCode) {
+        case 38:
+            _paddles[0].direction = kDirectionDown;
+            break;
+        case 40:
+            _paddles[0].direction = kDirectionUp;
+            break;
+    }
+};
+
+document.onkeyup = function(evt) {
+    evt = evt || window.event;
+    
+    switch (evt.keyCode) {
+        case 38:
+            if(_paddles[0].direction == kDirectionDown)
+            	_paddles[0].direction = kDirectionNone;
+            break;
+        case 40:
+            if(_paddles[0].direction == kDirectionUp)
+            	_paddles[0].direction = kDirectionNone;
+            break;
+    }
+};
+</script>
+
+</body>
+
+</html>
